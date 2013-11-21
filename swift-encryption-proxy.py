@@ -44,9 +44,12 @@ def encrypt(data, aes_key):
 
 
 class ProxyClient(proxy.ProxyClient):
+    global HOSTNAME
+    
     def __init__(self, command, rest, version, headers, data, father):
         proxy.ProxyClient.__init__(self, command, rest, version, headers, data, father)
         self.down = []
+        self.hostname = HOSTNAME
 
     def connectionMade(self):
         if self.father.method == 'PUT':
@@ -55,6 +58,8 @@ class ProxyClient(proxy.ProxyClient):
         for header, value in self.headers.items():
             if self.father.method == 'PUT' and header == 'content-length':
                 value = len(self.data)
+            if header == 'host':
+                value = self.hostname
             self.sendHeader(header, value)
         self.endHeaders()
         self.transport.write(self.data)
@@ -68,8 +73,11 @@ class ProxyClient(proxy.ProxyClient):
             self._finished = True
             data = ''.join(self.down)
             if self.father.method == 'GET':
-                data = decrypt(data, AES_KEY)
-                self.father.responseHeaders.setRawHeaders('content-length', [str(len(data))])
+                try:
+                    data = decrypt(data, AES_KEY)
+                    self.father.responseHeaders.setRawHeaders('content-length', [str(len(data))])
+                except ValueError:
+                    pass
             self.father.write(data)
             self.father.finish()
             self.transport.loseConnection()
@@ -88,7 +96,13 @@ class ReverseProxyResource(proxy.ReverseProxyResource):
             self.reactor)
 
 
-log.startLogging(sys.stdout)
-site = server.Site(ReverseProxyResource('127.0.0.1', 8080, ''))
-reactor.listenTCP(8081, site)
-reactor.run()
+if __name__ == '__main__':
+    global HOSTNAME
+    if len(sys.argv) < 2:
+        exit("Missing hostname")
+    HOSTNAME = sys.argv[1]
+    log.startLogging(sys.stdout)
+    site = server.Site(ReverseProxyResource(HOSTNAME, 8080, ''))
+    reactor.listenTCP(8080, site)
+
+    reactor.run()
