@@ -49,9 +49,8 @@ class ProxyClient(proxy.ProxyClient):
         self.down = ""
 
     def connectionMade(self):
-        # Upload, done in a single step
-        self.data = encrypt(self.data, AES_KEY)
-        
+        if self.father.method == 'PUT':
+            self.data = encrypt(self.data, AES_KEY)
         self.sendCommand(self.command, self.rest)
         for header, value in self.headers.items():
             if header == 'content-length':
@@ -67,9 +66,9 @@ class ProxyClient(proxy.ProxyClient):
     def handleResponseEnd(self):
         if not self._finished:
             self._finished = True
-            try:
+            if self.father.method == 'GET':
                 data = decrypt(self.down, AES_KEY)
-            except: # most likely not encrypted data, but status response
+            else:
                 data = self.down
             self.father.responseHeaders.setRawHeaders('content-length',
                                                       [str(len(data))])
