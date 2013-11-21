@@ -46,14 +46,14 @@ def encrypt(data, aes_key):
 class ProxyClient(proxy.ProxyClient):
     def __init__(self, command, rest, version, headers, data, father):
         proxy.ProxyClient.__init__(self, command, rest, version, headers, data, father)
-        self.down = ""
+        self.down = []
 
     def connectionMade(self):
         if self.father.method == 'PUT':
             self.data = encrypt(self.data, AES_KEY)
         self.sendCommand(self.command, self.rest)
         for header, value in self.headers.items():
-            if header == 'content-length':
+            if self.father.method == 'PUT' and header == 'content-length':
                 value = len(self.data)
             self.sendHeader(header, value)
         self.endHeaders()
@@ -61,17 +61,15 @@ class ProxyClient(proxy.ProxyClient):
 
     def handleResponsePart(self, buffer):
         # Decryption is done once all data is downloaded from Swift
-        self.down += buffer
+        self.down.append(buffer)
 
     def handleResponseEnd(self):
         if not self._finished:
             self._finished = True
+            data = ''.join(self.down)
             if self.father.method == 'GET':
-                data = decrypt(self.down, AES_KEY)
-            else:
-                data = self.down
-            self.father.responseHeaders.setRawHeaders('content-length',
-                                                      [str(len(data))])
+                data = decrypt(data, AES_KEY)
+                self.father.responseHeaders.setRawHeaders('content-length', [str(len(data))])
             self.father.write(data)
             self.father.finish()
             self.transport.loseConnection()
